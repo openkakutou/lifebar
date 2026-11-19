@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build WASM module
+        if: hashFiles('cmd/wasm/*.go') != ''
+        run: GOOS=js GOARCH=wasm go build -o lifebar.wasm ./cmd/wasm
+
+      - name: Copy wasm_exec.js glue
+        if: hashFiles('cmd/wasm/*.go') != ''
+        run: cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" wasm_exec.js
+
+      - name: Set up Node.js
+        if: hashFiles('cmd/wasm/*.go') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The WASM entrypoint and its smoke test arrive with backlog item 007; until
+      # cmd/wasm exists, the WASM steps below are skipped and a tag only
+      # publishes the Go module.
+      # Gate publishing on a real smoke test of the exact just-built
+      # lifebar.wasm bytes, not just a successful native build/test/vet — a
+      # broken WASM artifact (e.g. a panic-recovery regression at the JS
+      # boundary, or a wasm_exec.js/Go-version mismatch) must never reach
+      # a published release. See
+      # backlog item 007.
+      - name: Smoke test the WASM build
+        if: hashFiles('cmd/wasm/*.go') != ''
+        run: node cmd/wasm/smoke.mjs lifebar.wasm
+
+      - name: Publish release assets
+        if: hashFiles('cmd/wasm/*.go') != ''
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            lifebar.wasm
+            wasm_exec.js
+          fail_on_unmatched_files: true

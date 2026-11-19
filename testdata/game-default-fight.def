@@ -1,0 +1,45 @@
+; OpenKakutou test lifebar: original solid bars (see fixture_test.go).
+[Info]
+name = OpenKakutou test bars
+localcoord = 320,240
+
+[Files]
+sff = fight.sff
+
+[Lifebar]
+p1.pos = 8,8
+p1.bg0.spr = 1,0
+p1.mid.spr = 3,0
+p1.mid.offset = 2,2
+p1.front.spr = 2,0
+p1.front.offset = 2,2
+p1.range.x = 129,2
+p2.pos = 180,8
+p2.bg0.spr = 1,0
+p2.mid.spr = 3,0
+p2.mid.offset = 2,2
+p2.front.spr = 2,0
+p2.front.offset = 2,2
+p2.range.x = 2,129
+
+[Powerbar]
+p1.pos = 8,22
+p1.bg0.spr = 5,0
+p1.front.spr = 4,0
+p1.front.offset = 2,2
+p1.range.x = 2,101
+p2.pos = 208,22
+p2.bg0.spr = 5,0
+p2.front.spr = 4,0
+p2.front.offset = 2,2
+p2.range.x = 101,2
+
+[Name]
+p1.pos = 8,42
+p1.name.font = 1,0,1
+p2.pos = 312,42
+p2.name.font = 1,0,-1
+
+[Time]
+pos = 160,22
+counter.font = 1,0,0

@@ -4,7 +4,7 @@
 
 ## Project overview
 
-OpenKakutou `lifebar` is a read/write Go library for MUGEN/Ikemen GO lifebar files (`fight.def` and the files its `[Files]` section references), decided in roadmap decision `046`, which replaces the separate parsers of `lifebar-viewer-web`, `lifebar-editor` and `game`. It also owns the lifebar behavior those consumers must share: element layout, bar fill spans and the trailing life meter, as Ikemen GO's `fightscreen.go` does them. Consumers: `game` (native and web, through its shared core, roadmap decision `045`), `lifebar-viewer-web`, `lifebar-editor`. Depends on `sff` (sprites), `fnt` (fonts) and `snd` (sounds). It compiles to WASM and has no rendering dependency, like `stage`.
+OpenKakutou `lifebar` is a Go library (reading today, writing planned in backlog item 006) for MUGEN/Ikemen GO lifebar files (`fight.def` and the files its `[Files]` section references), decided in roadmap decision `046`, which replaces the separate parsers of `lifebar-viewer-web`, `lifebar-editor` and `game`. It also owns the lifebar behavior those consumers must share: element layout, bar fill spans and the trailing life meter, as Ikemen GO's `fightscreen.go` does them. Consumers: `game` (native and web, through its shared core, roadmap decision `045`), `lifebar-viewer-web`, `lifebar-editor`. Depends on `character` (its `air` package, for the `[Begin Action]` animations); `sff` (sprites), `fnt` (fonts) and `snd` (sounds) are planned with backlog item 005. It compiles to WASM and has no rendering dependency, like `stage`.
 
 **Stack:** Go 1.26, compiled to WASM (`GOOS=js GOARCH=wasm`) for web consumers, imported as a Go module by native ones.
 **Type:** library

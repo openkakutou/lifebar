@@ -122,6 +122,40 @@ type Bar struct {
 	Bg0, Bg1, Bg2   Element
 	Mid, Front, Top Element
 	LeaderOnTop     bool
+	// Bg0Variants, Bg1Variants, Bg2Variants and FrontVariants are the
+	// per-value elements (p1.front50.*, p1.frontmax.*), in rising order:
+	// see Pick.
+	Bg0Variants, Bg1Variants, Bg2Variants, FrontVariants []Variant
+}
+
+// Variant is an element shown from a value on: a life percentage for a
+// life bar, a power for a power bar, or, Max, once the power is full.
+type Variant struct {
+	From    int
+	Max     bool
+	Element Element
+}
+
+// Pick is the element shown at value (of max): the variant with the highest
+// From value reaches, else base; a Max variant once value reaches max
+// (Ikemen GO's front selection, fightscreen.go:640-655 and resolvePBKey,
+// 1025-1041).
+func Pick(base Element, variants []Variant, value, max float64) Element {
+	picked := base
+	for _, v := range variants {
+		if v.Max {
+			continue
+		}
+		if value >= float64(v.From) {
+			picked = v.Element
+		}
+	}
+	for _, v := range variants {
+		if v.Max && value >= max {
+			return v.Element
+		}
+	}
+	return picked
 }
 
 // PlayerLife is a [Lifebar] player.

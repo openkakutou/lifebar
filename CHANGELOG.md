@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-21
+
+### Added
+- Per-value bar elements, as Ikemen GO reads and picks them: a life bar's `bg0N` / `bg1N` / `bg2N` / `frontN` from N % of life on, a power bar's from power N on and `…max` once full (`Bar.FrontVariants` and siblings, `Pick`).
+
 ## [0.2.0] - 2026-11-21
 
 ### Added

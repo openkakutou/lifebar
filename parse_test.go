@@ -860,3 +860,32 @@ func TestParse_ReadsEachSidesWinCall(t *testing.T) {
 		t.Errorf("no win keys: %+v, want the defaults", none.Round.Win[0])
 	}
 }
+
+// fightscreen.go:378-396, 640-655: a life bar's front50 shows from 50 % of
+// life on, the plain front below; a power bar's frontmax once power is full
+// (readPBKeys, resolvePBKey).
+func TestParse_PerValueBarElements(t *testing.T) {
+	lb, _ := Parse("[Lifebar]\n" +
+		"p1.front.spr = 1,0\n" +
+		"p1.front50.spr = 1,50\n" +
+		"p1.front80.spr = 1,80\n" +
+		"[Powerbar]\n" +
+		"p1.front.spr = 2,0\n" +
+		"p1.front1000.spr = 2,1\n" +
+		"p1.frontmax.spr = 2,9\n")
+	life := lb.Life[0].Bar
+	for pct, want := range map[float64]int{10: 0, 50: 50, 79: 50, 100: 80} {
+		if got := Pick(life.Front, life.FrontVariants, pct, 100).Sprite.Image; got != want {
+			t.Errorf("life %v%%: front image %d, want %d", pct, got, want)
+		}
+	}
+	power := lb.Power[0].Bar
+	for value, want := range map[float64]int{500: 0, 1500: 1, 3000: 9} {
+		if got := Pick(power.Front, power.FrontVariants, value, 3000).Sprite.Image; got != want {
+			t.Errorf("power %v: front image %d, want %d", value, got, want)
+		}
+	}
+	if len(lb.Life[1].FrontVariants) != 0 {
+		t.Errorf("p2 variants = %+v, want none", lb.Life[1].FrontVariants)
+	}
+}

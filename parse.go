@@ -379,8 +379,48 @@ func (r reader) bar(k iniKeys, pre string) Bar {
 	return b
 }
 
+// variants reads the per-value elements pre+name+N.* (and, withMax,
+// pre+name+max.*) of a bar (readMultipleValuesF, fightscreen.go:378-396;
+// readPBKeys, 911-935), in rising order.
+func (r reader) variants(k iniKeys, pre, name string, withMax bool) []Variant {
+	seen := map[string]bool{}
+	var out []Variant
+	for key := range k {
+		rest, ok := strings.CutPrefix(key, pre+name)
+		if !ok {
+			continue
+		}
+		dot := strings.IndexByte(rest, '.')
+		if dot <= 0 || seen[rest[:dot]] {
+			continue
+		}
+		suffix := rest[:dot]
+		v := Variant{Element: r.element(k, pre+name+suffix+".", 0)}
+		n, err := strconv.Atoi(suffix)
+		numeric := err == nil && n >= 0
+		if !numeric && !(withMax && suffix == "max") {
+			continue
+		}
+		v.From = n
+		v.Max = !numeric
+		seen[suffix] = true
+		out = append(out, v)
+	}
+	slices.SortFunc(out, func(a, b Variant) int { return a.From - b.From })
+	return out
+}
+
+// withVariants is b with its per-value elements.
+func (r reader) withVariants(b Bar, k iniKeys, pre string, withMax bool) Bar {
+	b.Bg0Variants = r.variants(k, pre, "bg0", withMax)
+	b.Bg1Variants = r.variants(k, pre, "bg1", withMax)
+	b.Bg2Variants = r.variants(k, pre, "bg2", withMax)
+	b.FrontVariants = r.variants(k, pre, "front", withMax)
+	return b
+}
+
 func (r reader) playerLife(k iniKeys, pre string) PlayerLife {
-	l := PlayerLife{Bar: r.bar(k, pre), MidFreeze: true, MidDelay: 30, MidMult: 1, MidSteps: 8}
+	l := PlayerLife{Bar: r.withVariants(r.bar(k, pre), k, pre, false), MidFreeze: true, MidDelay: 30, MidMult: 1, MidSteps: 8}
 	k.flag("mid.shift", &l.MidShift)
 	k.flag("mid.freeze", &l.MidFreeze)
 	k.ints("mid.delay", &l.MidDelay)
@@ -391,7 +431,7 @@ func (r reader) playerLife(k iniKeys, pre string) PlayerLife {
 }
 
 func (r reader) powerBar(k iniKeys, pre string) PowerBar {
-	p := PowerBar{Bar: r.bar(k, pre), Counter: text(k, pre+"counter.", "%i", 0, 0)}
+	p := PowerBar{Bar: r.withVariants(r.bar(k, pre), k, pre, true), Counter: text(k, pre+"counter.", "%i", 0, 0)}
 	k.flag(pre+"levelbars", &p.LevelBars)
 	return p
 }

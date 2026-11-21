@@ -588,23 +588,24 @@ func TestParse_WarnsOnlyOnSectionsIkemenIgnores(t *testing.T) {
 	}
 }
 
-func TestParse_KeepsTheOtherAnimationsWhenOneIsCorrupt(t *testing.T) {
+// Ikemen GO reads a frame only from a line starting with a digit or '-'
+// and skips the others (anim.go): the action of a line that is not a frame
+// is kept, without warning; empty, it holds the next block's frames.
+func TestParse_SkipsALineThatIsNotAFrame(t *testing.T) {
 	lb, warnings := Parse("[Begin Action 1]\n1,0, 0,0, 5\n" +
 		"[Begin Action 2]\nthis is not a frame\n" +
 		"[Begin Action 3]\n3,0, 0,0, 7\n3,1, 0,0, 8\n")
 
-	wantWarnings := []Warning{{Section: "Begin Action 2", Line: 3,
-		Reason: `air: line 2: malformed frame line "this is not a frame": expected at least 5 comma-separated fields`}}
-	if !reflect.DeepEqual(warnings, wantWarnings) {
-		t.Errorf("warnings = %v, want %v", warnings, wantWarnings)
-	}
-	if _, ok := lb.Animations[2]; ok {
-		t.Error("Animations[2] kept, want the corrupt action dropped")
+	if len(warnings) != 0 {
+		t.Errorf("warnings = %v, want none", warnings)
 	}
 	if a := lb.Animations[1]; len(a.Frames) != 1 || a.Frames[0].Time != 5 {
 		t.Errorf("Animations[1] = %+v", a)
 	}
-	if a := lb.Animations[3]; len(a.Frames) != 2 || a.Frames[1].Image != 1 || a.Frames[1].Time != 8 {
+	if a := lb.Animations[2]; len(a.Frames) != 2 || a.Frames[0].Group != 3 {
+		t.Errorf("Animations[2] = %+v, want the next block's frames", a)
+	}
+	if a := lb.Animations[3]; len(a.Frames) != 2 {
 		t.Errorf("Animations[3] = %+v", a)
 	}
 }
@@ -665,18 +666,17 @@ func TestParse_GivesAnEmptyActionTheFramesOfTheNextActionInTheFile(t *testing.T)
 	}
 }
 
-func TestParse_WarnsAndDropsACopyActionBlockKeepingItsNeighbours(t *testing.T) {
-	lb, warnings := Parse("[Begin Action 1]\n1,0, 0,0, 5\n" + // 1-2
-		"[Begin Action 2]\nCopy Action 1\n" + // 3-4
-		"[Begin Action 3]\n3,0, 0,0, 7\n") // 5-6
+// Copy Action (Ikemen GO, anim.go:359-370): the action copies action 1.
+func TestParse_CopyActionCopiesTheNamedAction(t *testing.T) {
+	lb, warnings := Parse("[Begin Action 1]\n1,0, 0,0, 5\n" +
+		"[Begin Action 2]\nCopy Action 1\n" +
+		"[Begin Action 3]\n3,0, 0,0, 7\n")
 
-	wantWarnings := []Warning{{Section: "Begin Action 2", Line: 3,
-		Reason: `air: line 2: malformed frame line "Copy Action 1": expected at least 5 comma-separated fields`}}
-	if !reflect.DeepEqual(warnings, wantWarnings) {
-		t.Errorf("warnings = %v, want %v", warnings, wantWarnings)
+	if len(warnings) != 0 {
+		t.Errorf("warnings = %v, want none", warnings)
 	}
-	if _, ok := lb.Animations[2]; ok {
-		t.Error("Animations[2] kept, want the Copy Action block dropped")
+	if a := lb.Animations[2]; len(a.Frames) != 1 || a.Frames[0].Group != 1 {
+		t.Errorf("Animations[2] = %+v, want action 1's frame", a)
 	}
 	if len(lb.Animations[1].Frames) != 1 || len(lb.Animations[3].Frames) != 1 {
 		t.Errorf("Animations = %+v, want actions 1 and 3 kept", lb.Animations)
@@ -836,5 +836,27 @@ func TestParse_PicksTheComboSyntaxFromTheLastInfoBeforeTheCombo(t *testing.T) {
 		if lb.Combo[0].Pos != c.wantPos {
 			t.Errorf("%s: Combo[0].Pos = %v, want %v", c.name, lb.Combo[0].Pos, c.wantPos)
 		}
+	}
+}
+
+// fightscreen.go:3484-3520: each side's win call reads p1. / p2. keys over
+// the shared win. ones.
+func TestParse_ReadsEachSidesWinCall(t *testing.T) {
+	lb, _ := Parse("[Round]\n" +
+		"win.text = \"%s Wins\"\n" +
+		"win.displaytime = 90\n" +
+		"win.snd = 5,0\n" +
+		"p2.win.text = \"%s Wins!\"\n" +
+		"p2.win.offset = 3,4\n")
+	w1, w2 := lb.Round.Win[0], lb.Round.Win[1]
+	if w1.Text.Text != "%s Wins" || w1.DisplayTime != 90 || w1.Sound != (SoundRef{5, 0}) {
+		t.Errorf("p1 win = %+v", w1)
+	}
+	if w2.Text.Text != "%s Wins!" || w2.DisplayTime != 90 || w2.Text.Layout.Offset != [2]float32{3, 4} {
+		t.Errorf("p2 win = %+v, want its own text and offset, the shared display time", w2)
+	}
+	none, _ := Parse("[Round]\n")
+	if none.Round.Win[0].DisplayTime != -2 || none.Round.Win[0].Sound.Group != -1 {
+		t.Errorf("no win keys: %+v, want the defaults", none.Round.Win[0])
 	}
 }

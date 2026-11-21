@@ -250,7 +250,7 @@ type Announcement struct {
 	DisplayTime int // -2 by default
 }
 
-// Round is the [Round] section. Times are in ticks. Its win, ai.win and
+// Round is the [Round] section. Times are in ticks. Its win2-4, ai.win and
 // ai.lose announcements, fade and shutter colors, per-win-type texts and
 // bg0-31 layers are not read yet.
 type Round struct {
@@ -277,7 +277,10 @@ type Round struct {
 	ToSndTime     int // KoSndTime by default
 	To            Announcement
 	Draw          Announcement
-	SlowTime      int // 60 by default
+	// Win is each side's win call (p1.win.* over win.*); its text's %s is
+	// the winner's name.
+	Win      [2]Announcement
+	SlowTime int // 60 by default
 	// SlowFadeTime is 75% of SlowTime by default and never above it.
 	SlowFadeTime int
 	// SlowSpeed is kept within 0.01 and 1.

@@ -155,15 +155,18 @@ func isBeginAction(s iniSection) bool {
 // wins, as in Ikemen GO (anim.go:1334). A block without frames takes the
 // frames of the next block in file order, chained, as Ikemen GO's
 // compileAction does (anim.go:1344); one still empty at the end of the file
-// stays empty.
-//
-// shortcut: "Copy Action" is not resolved (character/air rejects the line, so
-// the block is dropped with a warning), upgrade with character backlog 083.
+// stays empty. A "Copy Action N" block takes action N's frames, through up to
+// 8 copies, and is dropped when it cannot (resolveCopyAction,
+// anim.go:1386-1424).
 func readAnimations(sections []iniSection) (map[int]air.Animation, []Warning) {
 	var warnings []Warning
-	var blocks []air.Animation
+	var blocks []animBlock
 	for _, s := range sections {
 		if !isBeginAction(s) {
+			continue
+		}
+		if b, ok := copyBlock(s); ok {
+			blocks = append(blocks, b)
 			continue
 		}
 		parsed, err := air.Parse(strings.NewReader(strings.Join(s.lines, "\n")))
@@ -171,26 +174,87 @@ func readAnimations(sections []iniSection) (map[int]air.Animation, []Warning) {
 			warnings = append(warnings, Warning{Section: s.inner, Line: s.line, Reason: err.Error()})
 			continue
 		}
-		blocks = append(blocks, parsed...)
+		for _, a := range parsed {
+			blocks = append(blocks, animBlock{anim: a, copyOf: -1})
+		}
 	}
-	animations := map[int]air.Animation{}
-	var compile func(i int) air.Animation
-	compile = func(i int) air.Animation {
-		a := blocks[i]
-		if existing, taken := animations[a.Number]; taken {
+	compiled := map[int]animBlock{}
+	var compile func(i int) animBlock
+	compile = func(i int) animBlock {
+		b := blocks[i]
+		if existing, taken := compiled[b.anim.Number]; taken {
 			return existing
 		}
-		if len(a.Frames) == 0 && i+1 < len(blocks) {
+		if len(b.anim.Frames) == 0 && b.copyOf < 0 && i+1 < len(blocks) {
 			next := compile(i + 1)
-			a.Frames, a.LoopStart = next.Frames, next.LoopStart
+			b.anim.Frames, b.anim.LoopStart, b.copyOf = next.anim.Frames, next.anim.LoopStart, next.copyOf
 		}
-		animations[a.Number] = a
-		return a
+		compiled[b.anim.Number] = b
+		return b
 	}
 	for i := range blocks {
 		compile(i)
 	}
-	return animations, warnings
+	return resolveCopies(compiled), warnings
+}
+
+// animBlock is a [Begin Action N] block: its animation, or the action it
+// copies (-1 for none).
+type animBlock struct {
+	anim   air.Animation
+	copyOf int
+}
+
+// copyBlock reads a block whose first line is "Copy Action N".
+func copyBlock(s iniSection) (animBlock, bool) {
+	for _, line := range s.lines {
+		line = strings.ToLower(strings.TrimSpace(strings.SplitN(line, ";", 2)[0]))
+		if line == "" || strings.HasPrefix(line, "[") {
+			continue // blank, or the block's header
+		}
+		if !strings.HasPrefix(line, "copy action ") {
+			return animBlock{}, false
+		}
+		number, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(strings.ToLower(s.subname), "action")))
+		if err != nil {
+			return animBlock{}, false
+		}
+		target, err := strconv.Atoi(strings.TrimSpace(line[len("copy action "):]))
+		if err != nil {
+			target = -1 // an invalid number copies nothing
+		}
+		return animBlock{anim: air.Animation{Number: number}, copyOf: target}, true
+	}
+	return animBlock{}, false
+}
+
+// resolveCopies gives each copy block its target's frames, dropping those
+// whose target is missing, itself or more than 8 copies away.
+func resolveCopies(blocks map[int]animBlock) map[int]air.Animation {
+	animations := make(map[int]air.Animation, len(blocks))
+	for number, b := range blocks {
+		target := b.copyOf
+		for range 8 {
+			if target < 0 {
+				break
+			}
+			t, ok := blocks[target]
+			if !ok || target == number {
+				break
+			}
+			if t.copyOf >= 0 {
+				target = t.copyOf
+				continue
+			}
+			b.anim.Frames, b.anim.LoopStart = t.anim.Frames, t.anim.LoopStart
+			target = -1
+		}
+		if b.copyOf >= 0 && target >= 0 {
+			continue // unresolved: Ikemen GO drops it
+		}
+		animations[number] = b.anim
+	}
+	return animations
 }
 
 // readFiles reads the file references of [Files] (fightscreen.go:4931).
@@ -508,6 +572,24 @@ func (r reader) mirrorStartX(posX int, startX float32) float32 {
 	return mirrored
 }
 
+// playerKeys is k's keys under pre, each overridden by the player prefix p's
+// own (p + pre), as Ikemen GO's readATS(pPre, pre) reads them
+// (fightscreen.go:3484-3520).
+func playerKeys(k iniKeys, p, pre string) iniKeys {
+	out := iniKeys{}
+	for key, v := range k {
+		if strings.HasPrefix(key, pre) {
+			out[key] = v
+		}
+	}
+	for key, v := range k {
+		if strings.HasPrefix(key, p+pre) {
+			out[strings.TrimPrefix(key, p)] = v
+		}
+	}
+	return out
+}
+
 // announcement is Ikemen GO's ReadAnimTextSnd (common.go:1648).
 func (r reader) announcement(k iniKeys, pre string, layerNo int) Announcement {
 	a := Announcement{
@@ -562,6 +644,9 @@ func (r reader) round(k iniKeys) Round {
 	k.ints("to.sndtime", &ro.ToSndTime)
 	ro.To = r.announcement(k, "to.", 1)
 	ro.Draw = r.announcement(k, "draw.", 1)
+	for i := range ro.Win {
+		ro.Win[i] = r.announcement(playerKeys(k, fmt.Sprintf("p%d.", i+1), "win."), "win.", 1)
+	}
 
 	k.ints("slow.time", &ro.SlowTime)
 	ro.SlowFadeTime = int(float32(ro.SlowTime) * 0.75)

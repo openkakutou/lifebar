@@ -841,6 +841,8 @@ func TestParse_PicksTheComboSyntaxFromTheLastInfoBeforeTheCombo(t *testing.T) {
 
 // fightscreen.go:3484-3520: each side's win call reads p1. / p2. keys over
 // the shared win. ones.
+// fightscreen.go:3457-3468 readATS: a side whose pN.win.text, spr or anim
+// exists reads its whole call from pN.win.*, otherwise wholly from win.*.
 func TestParse_ReadsEachSidesWinCall(t *testing.T) {
 	lb, _ := Parse("[Round]\n" +
 		"win.text = \"%s Wins\"\n" +
@@ -852,12 +854,35 @@ func TestParse_ReadsEachSidesWinCall(t *testing.T) {
 	if w1.Text.Text != "%s Wins" || w1.DisplayTime != 90 || w1.Sound != (SoundRef{5, 0}) {
 		t.Errorf("p1 win = %+v", w1)
 	}
-	if w2.Text.Text != "%s Wins!" || w2.DisplayTime != 90 || w2.Text.Layout.Offset != [2]float32{3, 4} {
-		t.Errorf("p2 win = %+v, want its own text and offset, the shared display time", w2)
+	if w2.Text.Text != "%s Wins!" || w2.Text.Layout.Offset != [2]float32{3, 4} {
+		t.Errorf("p2 win = %+v, want its own text and offset", w2)
+	}
+	if w2.DisplayTime != -2 || w2.Sound.Group != -1 {
+		t.Errorf("p2 win = %+v, want the defaults, not the shared win.* keys", w2)
 	}
 	none, _ := Parse("[Round]\n")
 	if none.Round.Win[0].DisplayTime != -2 || none.Round.Win[0].Sound.Group != -1 {
 		t.Errorf("no win keys: %+v, want the defaults", none.Round.Win[0])
+	}
+}
+
+func TestParse_APlayerKeyWithoutTextSprOrAnimIsIgnored(t *testing.T) {
+	lb, _ := Parse("[Round]\n" +
+		"win.text = \"%s Wins\"\n" +
+		"win.snd = 5,0\n" +
+		"p1.win.snd = 7,0\n")
+	if got := lb.Round.Win[0].Sound; got != (SoundRef{5, 0}) {
+		t.Errorf("p1 win sound = %+v, want win.snd 5,0 (no p1.win.text/spr/anim)", got)
+	}
+}
+
+func TestParse_APlayerSpriteSelectsThePlayerKeys(t *testing.T) {
+	lb, _ := Parse("[Round]\n" +
+		"win.text = \"%s Wins\"\n" +
+		"p2.win.spr = 3,1\n")
+	w2 := lb.Round.Win[1]
+	if w2.Text.Text != "" || w2.Element.Sprite != (SpriteRef{3, 1}) {
+		t.Errorf("p2 win = %+v, want sprite 3,1 and no shared text", w2)
 	}
 }
 

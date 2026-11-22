@@ -612,22 +612,17 @@ func (r reader) mirrorStartX(posX int, startX float32) float32 {
 	return mirrored
 }
 
-// playerKeys is k's keys under pre, each overridden by the player prefix p's
-// own (p + pre), as Ikemen GO's readATS(pPre, pre) reads them
-// (fightscreen.go:3484-3520).
-func playerKeys(k iniKeys, p, pre string) iniKeys {
-	out := iniKeys{}
-	for key, v := range k {
-		if strings.HasPrefix(key, pre) {
-			out[key] = v
+// announcementPrefix is the prefix a side's announcement is read from, as Ikemen
+// GO's readATS(pPre, pre) chooses it (fightscreen.go:3457-3468): the
+// player's own keys when its text, spr or anim is written, otherwise the
+// shared ones. The two sets are never merged.
+func announcementPrefix(k iniKeys, p, pre string) string {
+	for _, key := range []string{"text", "spr", "anim"} {
+		if _, ok := k[p+pre+key]; ok {
+			return p + pre
 		}
 	}
-	for key, v := range k {
-		if strings.HasPrefix(key, p+pre) {
-			out[strings.TrimPrefix(key, p)] = v
-		}
-	}
-	return out
+	return pre
 }
 
 // announcement is Ikemen GO's ReadAnimTextSnd (common.go:1648).
@@ -685,7 +680,8 @@ func (r reader) round(k iniKeys) Round {
 	ro.To = r.announcement(k, "to.", 1)
 	ro.Draw = r.announcement(k, "draw.", 1)
 	for i := range ro.Win {
-		ro.Win[i] = r.announcement(playerKeys(k, fmt.Sprintf("p%d.", i+1), "win."), "win.", 1)
+		pre := announcementPrefix(k, playerPrefix(i), "win.")
+		ro.Win[i] = r.announcement(k, pre, 1)
 	}
 
 	k.ints("slow.time", &ro.SlowTime)

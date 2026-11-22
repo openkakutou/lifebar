@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-22
+
+### Fixed
+- A side's win call is read wholly from its own `p1.win.*` / `p2.win.*` keys when one of its text, spr or anim is written, otherwise wholly from `win.*`, as Ikemen GO does; the two sets are no longer merged key by key.
+
 ## [0.3.0] - 2026-11-21
 
 ### Added
